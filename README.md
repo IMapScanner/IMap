@@ -8,7 +8,7 @@ IMap includes a probe packet generation module, which is responsible to generate
 To use IMap, operators should first specify the scanning address spaces and scanning port ranges beforehand. Then IMap control plane programs parse these configurations and issue the parsed parameters into the IMap packet processing logics. After that, IMap data plane programs generate high-speed probe packets and process the corresponding response packets accordingly. Finally, the scanning results, i.e., the information extracted from the response packets, are written into a persistent database, such as the Redis in-memory data store employed in this repo. The whole workflow of IMap is displayed as follow.
 
 <div align=center>
-<img src="https://raw.githubusercontent.com/IMapScanner/IMap/master/IMap-workflow.png" width="75%" height="75%">
+<img src="https://raw.githubusercontent.com/IMapScanner/IMap/master/IMap-workflow.png" width="60%" height="60%">
 </div>
 
 ## Repository Structure
@@ -30,7 +30,7 @@ To use IMap, operators should first specify the scanning address spaces and scan
 sudo apt update && sudo apt install redis-server
 sudo systemctl start redis
 # 2. Download the source code of IMap
-git clone https://github.com/EricDracula/IMap
+git clone https://github.com/IMap/IMap
 # 3. Compile IMap
 cd IMap
 make server
@@ -41,7 +41,7 @@ make server
 # Set the environment variable $SDE and $SDE_INSTALL, and download
 # the p4_build.sh from Barefoot and put it into $SDE.
 # 1. Download the source code of IMap
-git clone https://github.com/EricDracula/IMap
+git clone https://github.com/IMapScanner/IMap
 # 2. Configure and compile IMap
 cd IMap 
 # Then modify src/iconfig.h according to your configuration and specify
