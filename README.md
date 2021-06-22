@@ -3,11 +3,13 @@
 ## Overview
 We identify the challenges that current network scanners meet, and propose IMap, a fast and scalable in-network scanner with programmable switches. 
 
-IMap includes a probe packet generation module, which is responsible to generate high-speed probe packets with random address and adaptive rate, and a response packetprocessing module, which processes the response packets in a correct and efficient manner.
+IMap includes a probe packet generation module, which is responsible to generate high-speed probe packets with random address and adaptive rate, and a response packet processing module, which processes the response packets in a correct and efficient manner.
 
-To use IMap, operators should first specify the scanning address spaces and scanning port ranges beforehand. Then IMap control plane programs parse these configurations and issue the parsed parameters into the IMappacket processing logics. After that, IMap data plane programs generate high-speed probe packets and process thecorresponding response packets accordingly. Finally, the scanning results, i.e., the information extracted from the responsepackets, are written into a persistent database, such as the Redis in-memory data store employed in this repo. The whole workflow of IMap is displayed as follow.
+To use IMap, operators should first specify the scanning address spaces and scanning port ranges beforehand. Then IMap control plane programs parse these configurations and issue the parsed parameters into the IMap packet processing logics. After that, IMap data plane programs generate high-speed probe packets and process the corresponding response packets accordingly. Finally, the scanning results, i.e., the information extracted from the response packets, are written into a persistent database, such as the Redis in-memory data store employed in this repo. The whole workflow of IMap is displayed as follow.
 
-![The workflow of IMap](https://raw.githubusercontent.com/IMapScanner/IMap/master/IMap-workflow.png)
+<div align=center>
+<img src="https://raw.githubusercontent.com/IMapScanner/IMap/master/IMap-workflow.png" width="75%" height="75%">
+</div>
 
 ## Repository Structure
 `src`: The source code of IMap
