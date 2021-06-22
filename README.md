@@ -1,9 +1,22 @@
 # IMap
-In-Network Mapper (Scanner)
 
 ## Overview
+We identify the challenges that current network scanners meet, and propose IMap, a fast and scalable in-network scanner with programmable switches. 
+
+IMap includes a probe packet generation module, which is responsible to generate high-speed probe packets with random address and adaptive rate, and a response packetprocessing module, which processes the response packets in a correct and efficient manner.
+
+To use IMap, operators should first specify the scanning address spaces and scanning port ranges beforehand. Then IMap control plane programs parse these configurations and issue the parsed parameters into the IMappacket processing logics. After that, IMap data plane programs generate high-speed probe packets and process thecorresponding response packets accordingly. Finally, the scanning results, i.e., the information extracted from the responsepackets, are written into a persistent database, such as the Redis in-memory data store employed in this repo. The whole workflow of IMap is displayed as follow.
+
+![The workflow of IMap](https://raw.githubusercontent.com/IMapScanner/IMap/master/IMap-workflow.png)
 
 ## Repository Structure
+`src`: The source code of IMap
+- `src/iconfig.h`: The usual configurations of IMap
+- `src/server`: The source code of backend agent running on the storage server
+- `src/switch`: The source code of IMap switch part including control plane and data plane
+    - `src/switch/p4src`: The source code of IMap's data plane
+    - `src/switch/*.h, *.c`: The source code of IMap's control plane
+
 
 ## Installation
 ### Deploy on the server with DPDK NIC
@@ -28,7 +41,9 @@ make server
 # 1. Download the source code of IMap
 git clone https://github.com/EricDracula/IMap
 # 2. Configure and compile IMap
-cd IMap # Then modify src/iconfig.h according to your configuration
+cd IMap 
+# Then modify src/iconfig.h according to your configuration and specify
+# the scanning address spaces and scanning port ranges in src/switch/imap.c
 make switch
 ```
 
