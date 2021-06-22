@@ -30,7 +30,7 @@ To use IMap, operators should first specify the scanning address spaces and scan
 sudo apt update && sudo apt install redis-server
 sudo systemctl start redis
 # 2. Download the source code of IMap
-git clone https://github.com/IMap/IMap
+git clone https://github.com/IMapScanner/IMap
 # 3. Compile IMap
 cd IMap
 make server
