@@ -1,7 +1,7 @@
 /*************************************************************************
 	> File Name: imap.h
-	> Author: Guanyu Li
-	> Mail: dracula.guanyu.li@gmail.com
+	> Author:
+	> Mail:
 	> Created Time: Mon 14 Dec 2020 10:23:02 AM CST
     > Description: Config and macro definition file for IMap
  ************************************************************************/

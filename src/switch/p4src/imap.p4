@@ -1,7 +1,7 @@
 /*************************************************************************
 	> File Name: imap.p4
-	> Author: Guanyu Li
-	> Mail: dracula.guanyu.li@gmail.com
+	> Author:
+	> Mail:
 	> Created Time: Mon 14 Dec 2020 10:23:02 AM CST
     > Description: Main data plane program (P4-16) of IMap
  ************************************************************************/
