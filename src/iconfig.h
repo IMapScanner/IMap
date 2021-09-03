@@ -1,7 +1,7 @@
 /*************************************************************************
 	> File Name: imap.h
-	> Author:
-	> Mail:
+	> Author: Guanyu Li
+	> Mail: dracula.guanyu.li@gmail.com
 	> Created Time: Mon 14 Dec 2020 10:23:02 AM CST
     > Description: Config and macro definition file for IMap
  ************************************************************************/
@@ -12,9 +12,15 @@
 #define __IP_TYPE__ 4
 #define __TOFINO_MODE__ 0 // 0: ASIC 1: Model
 
+#define PROBE_TYPE_SYN_PROBER  0
+#define PROBE_TYPE_ICMP_PROBER 1
+#define __PROBE_TYPE__ PROBE_TYPE_SYN_PROBER
+// #define __PROBE_TYPE__ PROBE_TYPE_ICMP_PROBER
+
 #define ETHER_TYPE_IRESULT 0x6666
 #define ETHER_TYPE_IREPORT 0x6668
 #define ETHER_TYPE_IFLUSH  0x6688
+#define ETHER_TYPE_ITEMPLATE 0x6888
 
 #define PROBE_RESULT_NO_RESP       0b00
 #define PROBE_RESULT_INACTIVE_RESP 0b01
@@ -28,11 +34,12 @@
 // Probe IP Range Index: Port Index + Per Port Index
 #define IP_RANGE_INDEX_BITS 16
 // Set IP_RANGE_INDEX_PORT_BITS = 0 is just for single-switch-port scanning
+// in Tsinghua network
 #define IP_RANGE_INDEX_PORT_BITS 0
 #define IP_RANGE_INDEX_PER_PORT_BITS \
         (IP_RANGE_INDEX_BITS - IP_RANGE_INDEX_PORT_BITS)
 
-#define IP_RANGE_MAX_SIZE 256
+#define IP_RANGE_MAX_SIZE 512
 
 #define IP_RANGE_TABLE_SIZE (1 << IP_RANGE_INDEX_BITS)
 

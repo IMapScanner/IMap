@@ -31,6 +31,7 @@ CFLAGS += -DALLOW_EXPERIMENTAL_API
 # CFLAGS += -DDEBUG
 LDFLAGS_SHARED = $(shell $(PKGCONF) --libs libdpdk)
 LDFLAGS_SHARED += -lhiredis
+LDFLAGS_SHARED += -lpq
 LDFLAGS_STATIC = $(shell $(PKGCONF) --static --libs libdpdk)
 
 build/$(APP)-shared: $(SRCS-y) Makefile $(PC_FILE) | build

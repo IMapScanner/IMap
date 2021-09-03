@@ -1,7 +1,7 @@
 /*************************************************************************
 	> File Name: imap.c
-	> Author:
-	> Mail:
+	> Author: Guanyu Li
+	> Mail: dracula.guanyu.li@gmail.com
 	> Created Time: Mon 14 Dec 2020 10:23:02 AM CST
     > Description: Main program of IMap
  ************************************************************************/
@@ -10,13 +10,15 @@
 #include "imap.h"
 #include "iswitch.h"
 #include "ichannel.h"
+#include "iparser.h"
 
 typedef struct imap_conf_s {
     int           log_level;
-    port_h_t      probe_port;
-    probe_entry_t probe_port_range;
     uint32_t      probe_period;
     uint32_t      waiting_time;
+    port_h_t      probe_port;
+    probe_entry_t probe_port_range;
+    char          config_filename[256];
 } imap_conf_t;
 
 const switch_port_t FORWARD_LIST[] = {
@@ -24,16 +26,16 @@ const switch_port_t FORWARD_LIST[] = {
     // {0x6891d061124b, "4/0"},
 };
 
-const probe_entry_t TEST_SPACE[] = {
-    {0xc0800000, 0xc08fffff}, // 192.128.0.0/12
-    {0xc0900000, 0xc09fffff}, // 192.144.0.0/12
-    {0xc0a00000, 0xc0afffff}, // 192.160.0.0/12
-    {0xc0b00000, 0xc0bfffff}, // 192.176.0.0/12
-    {0xc0c00000, 0xc0cfffff}, // 192.192.0.0/12
-    {0xc0d00000, 0xc0dfffff}, // 192.208.0.0/12
-    {0xc0e00000, 0xc0efffff}, // 192.224.0.0/12
-    {0xc0f00000, 0xc0ffffff}, // 192.240.0.0/12
-    // {0xf0000000, 0xffffffff}
+// PRIME_LIST[i] is the smallest prime greater than 2 ^ i
+const uint32_t PRIME_LIST [] = {
+//  1, 2, 4,  8, 16, 32, 64, 128, ( 2 ^ i)
+    2, 3, 5, 11, 17, 37, 67, 131,
+//  256, 512, 1024, 2048, 4096, 8192, 16384, 32768,
+    257, 521, 1031, 2053, 4099, 8209, 16411, 32771,
+//  65536, 131072, 262144, 524288, 1048576, 2097152, 4194304, 8388608,
+    65537, 131101, 262147, 524309, 1048583, 2097169, 4194319, 8388617,
+//  16777216, 33554432, 67108864, 134217728, 268435456, 536870912
+    16777259, 33554467, 67108879, 134217757, 268435459, 536870923
 };
 
 probe_entry_t PIPR_ENTRIES[((uint64_t)1 << 32) / IP_RANGE_MAX_SIZE];
@@ -48,6 +50,7 @@ static void parse_options(imap_conf_t *iconf, int argc, char **argv) {
         OPT_RATE,
         OPT_SEED_RATE,
         OPT_WAITING_TIME,
+        OPT_CONFIG_FILE,
     };
     static struct option options[] = {
         {"help", no_argument, 0, 'h'},
@@ -57,6 +60,7 @@ static void parse_options(imap_conf_t *iconf, int argc, char **argv) {
         {"rate", required_argument, 0, OPT_RATE},
         {"seed-rate", required_argument, 0, OPT_SEED_RATE},
         {"waiting-time", required_argument, 0, OPT_WAITING_TIME},
+        {"config-file", required_argument, 0, OPT_CONFIG_FILE},
     };
 
     memset(iconf, 0, sizeof(imap_conf_t));
@@ -105,6 +109,10 @@ static void parse_options(imap_conf_t *iconf, int argc, char **argv) {
             case OPT_WAITING_TIME:
                 iconf->waiting_time = atoi(optarg);
                 printf("Waiting time: %u\n", atoi(optarg));
+                break;
+            case OPT_CONFIG_FILE:
+                strcpy(iconf->config_filename, optarg);
+                printf("Config file: %s\n", optarg);
                 break;
             case 'h':
             case '?':
@@ -352,7 +360,11 @@ static void start_scanner(imap_conf_t *iconf,
     }
 
     clock_gettime(CLOCK_REALTIME, &start_time);
+#if __PROBE_TYPE__ == PROBE_TYPE_SYN_PROBER
     imap_status = send_syn_temp_to_switch();
+#elif __PROBE_TYPE__ == PROBE_TYPE_ICMP_PROBER
+    imap_status = send_icmp_temp_to_switch();
+#endif
     if (imap_status == 0) {
         printf("ichannel: The template packets are "
                "sent to the data plane of IMap\n");
@@ -455,9 +467,14 @@ int main(int argc, char *argv[]) {
     int imap_status = 0;
     imap_conf_t iconf;
     iswitch_t iswitch;
-
+    probe_entry_t *probe_space_entries;
+    uint32_t probe_space_entries_count;
     // Parse cmd options
     parse_options(&iconf, argc, argv);
+
+    config_file_parse(iconf.config_filename, 
+                      &probe_space_entries, 
+                      &probe_space_entries_count);
 
     // The configuration iconf.probe_period can further be configured
     //based on the network utilization
@@ -473,7 +490,8 @@ int main(int argc, char *argv[]) {
     // Configure the probe period
     probe_period_config(&iswitch, iconf.probe_period);
 
-    start_scanner(&iconf, &iswitch, TEST_SPACE, ARRLEN(TEST_SPACE));
+    start_scanner(&iconf, &iswitch, probe_space_entries, 
+                  probe_space_entries_count);
 
     // while (1);
 

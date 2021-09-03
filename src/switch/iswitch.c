@@ -1,7 +1,7 @@
 /*************************************************************************
 	> File Name: iswitch.c
-	> Author:
-	> Mail:
+	> Author: Guanyu Li
+	> Mail: dracula.guanyu.li@gmail.com
 	> Created Time: Mon 14 Dec 2020 10:23:02 AM CST
     > Description: Data plane (Tofino) control interfaces for IMap
  ************************************************************************/

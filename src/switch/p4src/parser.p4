@@ -1,7 +1,7 @@
 /*************************************************************************
 	> File Name: parser.p4
-	> Author:
-	> Mail:
+	> Author: Guanyu Li
+	> Mail: dracula.guanyu.li@gmail.com
 	> Created Time: Mon 14 Dec 2020 10:23:02 AM CST
     > Description: Parser declaration for data plane programs of IMap
  ************************************************************************/
@@ -114,6 +114,7 @@ parser StackParser(packet_in pkt, out custom_header_t hdr) {
 parser ImapEgressParser(packet_in pkt,
                         out custom_header_t hdr,
                         out egress_metadata_t eg_md) {
+    Checksum() icmp_csum;
     Checksum() tcp_csum;
 
     state start {
@@ -141,6 +142,7 @@ parser ImapEgressParser(packet_in pkt,
             ETHERTYPE_ARP  : parse_arp;
             ETHERTYPE_IPV4 : parse_ipv4;
             ETHERTYPE_IPV6 : parse_ipv6;
+            ETHERTYPE_ITEMPLATE : parse_ipv4;
             default : reject;
         }
     }
@@ -188,6 +190,9 @@ parser ImapEgressParser(packet_in pkt,
 
     state parse_icmp {
         pkt.extract(hdr.icmp);
+        icmp_csum.subtract({ hdr.icmp.checksum });
+        icmp_csum.subtract({ hdr.icmp.id, hdr.icmp.seq_no });
+        eg_md.icmp_csum = icmp_csum.get();
         transition accept;
     }
 
@@ -201,7 +206,7 @@ parser ImapEgressParser(packet_in pkt,
             hdr.tcp.data_offset, hdr.tcp.res, hdr.tcp.urg,
             hdr.tcp.ack, hdr.tcp.psh, hdr.tcp.rst, hdr.tcp.syn, hdr.tcp.fin
         });
-        eg_md.checksum = tcp_csum.get();
+        eg_md.tcp_csum = tcp_csum.get();
         transition accept;
     }
 

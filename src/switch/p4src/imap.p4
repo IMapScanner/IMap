@@ -1,7 +1,7 @@
 /*************************************************************************
 	> File Name: imap.p4
-	> Author:
-	> Mail:
+	> Author: Guanyu Li
+	> Mail: dracula.guanyu.li@gmail.com
 	> Created Time: Mon 14 Dec 2020 10:23:02 AM CST
     > Description: Main data plane program (P4-16) of IMap
  ************************************************************************/
@@ -105,19 +105,28 @@ control SwitchIngress(
 
     // ---------- ti_probe_resp_judger_p0 ---------- //
 
+#if __PROBE_TYPE__ == PROBE_TYPE_SYN_PROBER
     Hash<bit<16>>(HashAlgorithm_t.CRC16) hi_dst_port;
-    Hash<bit<32>>(HashAlgorithm_t.CRC32) hi_ack_no;
+#elif __PROBE_TYPE__ == PROBE_TYPE_ICMP_PROBER
+    Hash<bit<16>>(HashAlgorithm_t.CRC16) hi_id;
+#endif
 
     // Part 1 of probe response judger
     action ai_probe_resp_judger_p0() {
-#if __IP_TYPE__ == 6
+#if __PROBE_TYPE__ == PROBE_TYPE_SYN_PROBER
+    #if __IP_TYPE__ == 6
         ig_md.probe_resp_port = hi_dst_port.get({ hdr.ipv6.next_hdr,
                                                   hdr.ipv6.dst_ip,
                                                   hdr.ipv6.src_ip });
-#else // Default IPv4
+    #else // Default IPv4
         ig_md.probe_resp_port = hi_dst_port.get({ hdr.ipv4.protocol,
                                                   hdr.ipv4.dst_ip,
                                                   hdr.ipv4.src_ip });
+    #endif
+#elif __PROBE_TYPE__ == PROBE_TYPE_ICMP_PROBER
+        ig_md.probe_resp_id = hi_id.get({ hdr.ipv4.protocol,
+                                          hdr.ipv4.dst_ip,
+                                          hdr.ipv4.src_ip });
 #endif
     }
 
@@ -130,19 +139,32 @@ control SwitchIngress(
 
     // ---------- ti_probe_resp_judger_p1 ---------- //
 
+#if __PROBE_TYPE__ == PROBE_TYPE_SYN_PROBER
+    Hash<bit<32>>(HashAlgorithm_t.CRC32) hi_ack_no;
+#elif __PROBE_TYPE__ == PROBE_TYPE_ICMP_PROBER
+    Hash<bit<16>>(HashAlgorithm_t.CRC16) hi_seq_no;
+#endif
+
     // Part 2 of probe response judger
     action ai_probe_resp_judger_p1() {
-#if __IP_TYPE__ == 6
+#if __PROBE_TYPE__ == PROBE_TYPE_SYN_PROBER
+    #if __IP_TYPE__ == 6
         ig_md.probe_resp_ack = hi_ack_no.get({ hdr.ipv6.next_hdr,
                                                hdr.ipv6.dst_ip,
                                                hdr.ipv6.src_ip,
-#else // Default IPv4
+    #else // Default IPv4
         ig_md.probe_resp_ack = hi_ack_no.get({ hdr.ipv4.protocol,
                                                hdr.ipv4.dst_ip,
                                                hdr.ipv4.src_ip,
-#endif
+    #endif
                                                hdr.tcp.dst_port,
                                                hdr.tcp.src_port });
+#elif __PROBE_TYPE__ == PROBE_TYPE_ICMP_PROBER
+        ig_md.probe_resp_seq = hi_seq_no.get({ hdr.ipv4.protocol,
+                                               hdr.ipv4.dst_ip,
+                                               hdr.ipv4.src_ip,
+                                               hdr.icmp.id });
+#endif
     }
 
     @stage(0)
@@ -160,7 +182,7 @@ control SwitchIngress(
         ig_md.bridged.pkt_label = PKT_LABEL_FLUSH_REQUEST;
     }
 
-    @stage(1)
+    @stage(0)
     table ti_flush_request_tagger {
         actions = { ai_flush_request_tagger; }
         size = 1;
@@ -197,6 +219,7 @@ control SwitchIngress(
         const default_action = ai_probe_generator();
     }
 
+#if __PROBE_TYPE__ == PROBE_TYPE_SYN_PROBER
     // ---------- ti_probe_resp_judger_p2 ---------- //
 
     // Part 3 of probe response judger
@@ -210,6 +233,7 @@ control SwitchIngress(
         size = 1;
         const default_action = ai_probe_resp_judger_p2();
     }
+#endif
 
     // ---------- ti_arp_request_tagger ---------- //
 
@@ -344,8 +368,14 @@ control SwitchIngress(
     // ---------- ti_probe_resp_inactive_handler ---------- //
 
     action ai_generate_probe_result() {
+#if __PROBE_TYPE__ == PROBE_TYPE_SYN_PROBER
         ig_md.bridged.probe_result[31: 16] = hdr.tcp.src_port;
         ig_md.bridged.probe_result[7: 0] = ig_md.bridged.pkt_label;
+#elif __PROBE_TYPE__ == PROBE_TYPE_ICMP_PROBER
+        ig_md.bridged.probe_result[31: 24] = hdr.icmp.type;
+        ig_md.bridged.probe_result[23: 16] = hdr.icmp.code;
+        ig_md.bridged.probe_result[7: 0] = ig_md.bridged.pkt_label;
+#endif
     }
 
     action ai_send_back() {
@@ -456,31 +486,33 @@ control SwitchIngress(
 
     apply {
         // ------ Determine the type of the packet ------ //
-        if (ig_intr_md.ingress_port == CPU_PORT ||
-            ig_intr_md.ingress_port == RECIRC_PORT) {
-            if (hdr.ethernet.ether_type == ETHERTYPE_IFLUSH) {
-                // Flush request packet from CPU
-                ti_flush_request_tagger.apply();
-                ti_resp_pkt_count_resetter.apply();
-            }
-            else {
-                // Template packet
-                ti_probe_port_stride_fetcher.apply();
-                // Probe generator will generate probe packets seed from the
-                // template packet and set the pkt_label
-                ti_probe_timer_setter.apply();
-                ti_probe_generator.apply();
-            }
+        if (hdr.ethernet.ether_type == ETHERTYPE_IFLUSH) {
+            // Flush request packet from CPU
+            ti_flush_request_tagger.apply();
+            ti_resp_pkt_count_resetter.apply();
+        }
+        else if (hdr.ethernet.ether_type == ETHERTYPE_ITEMPLATE) {
+            // Template packet
+            ti_probe_port_stride_fetcher.apply();
+            // Probe generator will generate probe packets seed from the
+            // template packet and set the pkt_label
+            ti_probe_timer_setter.apply();
+            ti_probe_generator.apply();
         }
         else if ((hdr.ipv4.dst_ip == PROBER_IP) &&
+#if __PROBE_TYPE__ == PROBE_TYPE_SYN_PROBER
                  ((hdr.tcp.rst == 1 && hdr.tcp.ack == 1) ||
                   (hdr.tcp.syn == 1 && hdr.tcp.ack == 1))) {
+#elif __PROBE_TYPE__ == PROBE_TYPE_ICMP_PROBER
+                 (hdr.icmp.isValid())) {
+#endif
             // Probe response packet judger: prepare the right hash result
             // Considering the dependency and resource constraints of Tofino,
             // we split the probe response packet judger into 3 parts.
             ti_probe_resp_judger_p0.apply();
             ti_probe_resp_judger_p1.apply();
             // Probe response packet checker
+#if __PROBE_TYPE__ == PROBE_TYPE_SYN_PROBER
             if (hdr.tcp.dst_port == ig_md.probe_resp_port) {
                 ti_probe_resp_judger_p2.apply();
                 if (hdr.tcp.ack_no == ig_md.probe_resp_ack) {
@@ -495,6 +527,20 @@ control SwitchIngress(
                     ti_resp_pkt_counter.apply();
                 }
             }
+#elif __PROBE_TYPE__ == PROBE_TYPE_ICMP_PROBER
+            if (hdr.icmp.id == ig_md.probe_resp_id &&
+                hdr.icmp.seq_no == ig_md.probe_resp_seq) {
+                // The is probe response packet!
+                if (hdr.icmp.type != 0) {
+                    ti_probe_resp_inactive_tagger.apply();
+                }
+                else {
+                    ti_probe_resp_active_tagger.apply();
+                }
+                // Set count of response packet
+                ti_resp_pkt_counter.apply();
+            }
+#endif
         }
         else if (hdr.arp_ipv4.isValid() &&
                  hdr.arp_ipv4.dst_proto_addr == PROBER_IP) {
@@ -636,6 +682,7 @@ control SwitchEgress(
     action ae_editor_p0() {
         // Get the probe table
         eg_md.probe_table = rae_probe_table_fetcher.execute(0);
+        hdr.ethernet.ether_type = ETHERTYPE_IPV4;
     }
 
     @stage(0)
@@ -733,7 +780,11 @@ control SwitchEgress(
     action ae_result_packer() {
         hdr.ethernet.ether_type = ETHERTYPE_IRESULT;
         hdr.ipv4.setInvalid();
+#if __PROBE_TYPE__ == PROBE_TYPE_SYN_PROBER
         hdr.tcp.setInvalid();
+#elif __PROBE_TYPE__ == PROBE_TYPE_ICMP_PROBER
+        hdr.icmp.setInvalid();
+#endif
         eg_md.result.result_meta.setValid();
         eg_md.result.result_pack_0.setValid();
         eg_md.result.result_pack_1.setValid();
@@ -1055,18 +1106,28 @@ control SwitchEgress(
 
     // ---------- te_editor_p5 ---------- //
 
+#if __PROBE_TYPE__ == PROBE_TYPE_SYN_PROBER
     Hash<bit<16>>(HashAlgorithm_t.CRC16) he_src_port;
+#elif __PROBE_TYPE__ == PROBE_TYPE_ICMP_PROBER
+    Hash<bit<16>>(HashAlgorithm_t.CRC16) he_id;
+#endif
 
     action ae_editor_p5() {
         // Set the 1st "secret"
-#if __IP_TYPE__ == 6
+#if __PROBE_TYPE__ == PROBE_TYPE_SYN_PROBER
+    #if __IP_TYPE__ == 6
         hdr.tcp.src_port = he_src_port.get({ hdr.ipv6.next_hdr,
                                              hdr.ipv6.src_ip,
                                              hdr.ipv6.dst_ip });
-#else // Default IPv4
+    #else // Default IPv4
         hdr.tcp.src_port = he_src_port.get({ hdr.ipv4.protocol,
                                              hdr.ipv4.src_ip,
                                              hdr.ipv4.dst_ip });
+    #endif
+#elif __PROBE_TYPE__ == PROBE_TYPE_ICMP_PROBER
+        hdr.icmp.id = he_id.get({ hdr.ipv4.protocol,
+                                  hdr.ipv4.src_ip,
+                                  hdr.ipv4.dst_ip });
 #endif
     }
 
@@ -1081,21 +1142,32 @@ control SwitchEgress(
 
     // ---------- te_editor_p6 ---------- //
 
+#if __PROBE_TYPE__ == PROBE_TYPE_SYN_PROBER
     Hash<bit<32>>(HashAlgorithm_t.CRC32) he_seq_no;
+#elif __PROBE_TYPE__ == PROBE_TYPE_ICMP_PROBER
+    Hash<bit<16>>(HashAlgorithm_t.CRC16) he_seq_no;
+#endif
 
     action ae_editor_p6() {
         // Set the 2nd "secret"
-#if __IP_TYPE__ == 6
+#if __PROBE_TYPE__ == PROBE_TYPE_SYN_PROBER
+    #if __IP_TYPE__ == 6
         hdr.tcp.seq_no = he_seq_no.get({ hdr.ipv6.next_hdr,
                                          hdr.ipv6.src_ip,
                                          hdr.ipv6.dst_ip,
-#else // Default IPv4
+    #else // Default IPv4
         hdr.tcp.seq_no = he_seq_no.get({ hdr.ipv4.protocol,
                                          hdr.ipv4.src_ip,
                                          hdr.ipv4.dst_ip,
-#endif
+    #endif
                                          hdr.tcp.src_port,
                                          hdr.tcp.dst_port });
+#elif __PROBE_TYPE__ == PROBE_TYPE_ICMP_PROBER
+        hdr.icmp.seq_no = he_seq_no.get({ hdr.ipv4.protocol,
+                                          hdr.ipv4.src_ip,
+                                          hdr.ipv4.dst_ip,
+                                          hdr.icmp.id });
+#endif
     }
 
     @stage(5)
@@ -1385,6 +1457,7 @@ control SwitchEgress(
             te_resultdb_15_result_accessor.apply();
 
             if (eg_intr_md.egress_port != RESULT_SERVER_PORT) {
+#if __PROBE_TYPE__ == PROBE_TYPE_SYN_PROBER
                 if (eg_md.bridged.pkt_label == PKT_LABEL_ACTIVE_RESP) {
                     // Probe response packet (active)
                     te_rst_responder.apply();
@@ -1394,6 +1467,9 @@ control SwitchEgress(
                     // Drop the packet when the packet enters egress MAC
                     te_drop.apply();
                 }
+#elif __PROBE_TYPE__ == PROBE_TYPE_ICMP_PROBER
+                te_drop.apply();
+#endif
             }
         }
     }
@@ -1410,17 +1486,21 @@ control SwitchEgressDeparser(
         in egress_intrinsic_metadata_for_deparser_t eg_intr_dprsr_md) {
 
     Checksum() ipv4_csum;
+    Checksum() icmp_csum;
     // IPv6 does not have checksum field
     Checksum() tcp_csum;
     Mirror() mirror;
 
     apply {
-        hdr.ipv4.hdr_checksum = ipv4_csum.update({
+        hdr.ipv4.checksum = ipv4_csum.update({
             hdr.ipv4.version, hdr.ipv4.ihl, hdr.ipv4.diffserv,
             hdr.ipv4.total_len, hdr.ipv4.identification, hdr.ipv4.flags,
             hdr.ipv4.frag_offset, hdr.ipv4.ttl, hdr.ipv4.protocol,
-            // Skip hdr.ipv4.hdr_checksum,
+            // Skip hdr.ipv4.checksum,
             hdr.ipv4.src_ip, hdr.ipv4.dst_ip
+        });
+        hdr.icmp.checksum = icmp_csum.update({
+            eg_md.icmp_csum, hdr.icmp.id, hdr.icmp.seq_no
         });
         hdr.tcp.checksum = tcp_csum.update({
 #if __IP_TYPE__ == 6
@@ -1430,7 +1510,7 @@ control SwitchEgressDeparser(
             hdr.tcp.src_port, hdr.tcp.dst_port, hdr.tcp.seq_no, hdr.tcp.ack_no,
             hdr.tcp.data_offset, hdr.tcp.res, hdr.tcp.urg, hdr.tcp.ack,
             hdr.tcp.psh, hdr.tcp.rst, hdr.tcp.syn, hdr.tcp.fin,
-            eg_md.checksum
+            eg_md.tcp_csum
         });
         if (eg_intr_dprsr_md.mirror_type == MIRROR_TYPE_E2E) {
             mirror.emit<mirror_h>(

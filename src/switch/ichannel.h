@@ -1,7 +1,7 @@
 /*************************************************************************
 	> File Name: ichannel.c
-	> Author:
-	> Mail:
+	> Author: Guanyu Li
+	> Mail: dracula.guanyu.li@gmail.com
 	> Created Time: Mon 14 Dec 2020 10:23:02 AM CST
     > Description: Program about probe modules of IMap
  ************************************************************************/
@@ -21,6 +21,7 @@
 #include <linux/ip.h>
 #include <linux/in6.h>
 #include <linux/ipv6.h>
+#include <linux/icmp.h>
 #include <linux/tcp.h>
 #include <sys/socket.h>
 #include <time.h>
@@ -61,16 +62,18 @@ typedef struct update_notifying_channel_s {
 } update_notifying_channel_t;
 
 #if __TOFINO_MODE__ == 0
-static const char CPUIF_NAME[] = "bf_pci0";
+// static const char CPUIF_NAME[] = "bf_pci0";
+static const char CPUIF_NAME[] = "enp4s0";
 #else
 static const char CPUIF_NAME[] = "veth251";
 #endif
 
 static unsigned short csum(unsigned short *ptr,int nbytes);
-int send_syn_temp_to_switch();
-int recv_probe_report_from_switch();
 int send_ipv6_syn_temp_to_switch();
 int recv_ipv6_probe_report_from_switch();
+int send_syn_temp_to_switch();
+int send_icmp_temp_to_switch();
+int recv_probe_report_from_switch();
 int creat_update_notifying_channel(update_notifying_channel_t *channel);
 int recv_update_notification(update_notifying_channel_t *channel);
 int recv_update_notification_from_switch(uint32_t timer, uint8_t *pipr_filter);

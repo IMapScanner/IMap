@@ -1,7 +1,7 @@
 /*************************************************************************
 	> File Name: header.p4
-	> Author:
-	> Mail:
+	> Author: Guanyu Li
+	> Mail: dracula.guanyu.li@gmail.com
 	> Created Time: Mon 14 Dec 2020 10:23:02 AM CST
     > Description: Header declaration for data plane programs of IMap
  ************************************************************************/
@@ -33,6 +33,7 @@ const ether_type_t ETHERTYPE_VLAN = 16w0x8100;
 const ether_type_t ETHERTYPE_IRESULT = ETHER_TYPE_IRESULT;
 const ether_type_t ETHERTYPE_IREPORT = ETHER_TYPE_IREPORT;
 const ether_type_t ETHERTYPE_IFLUSH  = ETHER_TYPE_IFLUSH;
+const ether_type_t ETHERTYPE_ITEMPLATE  = ETHER_TYPE_ITEMPLATE;
 
 typedef bit<8> ip_protocol_t;
 const ip_protocol_t IP_PROTOCOLS_ICMP = 1;
@@ -90,7 +91,7 @@ header ipv4_h {
     bit<13>     frag_offset;
     bit<8>      ttl;
     bit<8>      protocol;
-    bit<16>     hdr_checksum;
+    bit<16>     checksum;
     ipv4_addr_t src_ip;
     ipv4_addr_t dst_ip;
 }
@@ -104,6 +105,15 @@ header ipv6_h {
     bit<8>      hop_limit;
     ipv6_addr_t src_ip;
     ipv6_addr_t dst_ip;
+}
+
+header icmp_h {
+    bit<8>  type;
+    bit<8>  code;
+    bit<16> checksum;
+    bit<16> id;
+    bit<16> seq_no;
+    // bit<64> tstamp;
 }
 
 header tcp_h {
@@ -131,12 +141,6 @@ header udp_h {
     bit<16> dst_port;
     bit<16> hdr_length;
     bit<16> checksum;
-}
-
-header icmp_h {
-    bit<8>  type_;
-    bit<8>  code;
-    bit<16> hdr_checksum;
 }
 
 // Address Resolution Protocol -- RFC 6747
@@ -250,8 +254,13 @@ header mirror_h {
 
 struct ingress_metadata_t {
     bridged_h bridged;
+#if __PROBE_TYPE__ == PROBE_TYPE_SYN_PROBER
     bit<16>   probe_resp_port;
     bit<32>   probe_resp_ack;
+#elif __PROBE_TYPE__ == PROBE_TYPE_ICMP_PROBER
+    bit<16>   probe_resp_id;
+    bit<16>   probe_resp_seq;
+#endif
     bit<32>   last_probe_timer;
 }
 
@@ -260,7 +269,8 @@ struct egress_metadata_t {
     mirror_h    mirror;
     update_notification_h update_notification;
     result_h              result;
-    bit<16>     checksum;
+    bit<16>     icmp_csum;
+    bit<16>     tcp_csum;
     bit<48>     swp_mac;
 #if __IP_TYPE__ == 6
     ipv6_addr_t swp_ip;

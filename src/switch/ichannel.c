@@ -1,13 +1,39 @@
 /*************************************************************************
 	> File Name: ichannel.c
-	> Author:
-	> Mail:
+	> Author: Guanyu Li
+	> Mail: dracula.guanyu.li@gmail.com
 	> Created Time: Mon 14 Dec 2020 10:23:02 AM CST
     > Description: Program about probe modules of IMap
  ************************************************************************/
 
 #include "../iconfig.h"
 #include "ichannel.h"
+
+/*
+ Checksums - IP and TCP
+ */
+static unsigned short csum(unsigned short *ptr,int nbytes) {
+	register long sum;
+	unsigned short oddbyte;
+	register short answer;
+
+	sum = 0;
+	while (nbytes > 1) {
+		sum += *ptr++;
+		nbytes -= 2;
+	}
+	if (nbytes == 1) {
+		oddbyte = 0;
+		*((u_char*)&oddbyte)= *(u_char*)ptr;
+		sum += oddbyte;
+	}
+
+	sum = (sum >> 16) + (sum & 0xffff);
+	sum = sum + (sum >> 16);
+	answer = (short)~sum;
+	
+	return answer;
+}
 
 #if __IP_TYPE__ == 6
 int send_ipv6_syn_temp_to_switch() {
@@ -205,7 +231,6 @@ int recv_ipv6_probe_report_from_switch() {
 
     return 0;
 }
-
 #else
 int sendpkt_to_switch() {
 	int sockfd;
@@ -251,32 +276,6 @@ int sendpkt_to_switch() {
     return 0;
 }
 
-/*
- Checksums - IP and TCP
- */
-static unsigned short csum(unsigned short *ptr,int nbytes) {
-	register long sum;
-	unsigned short oddbyte;
-	register short answer;
-
-	sum = 0;
-	while (nbytes > 1) {
-		sum += *ptr++;
-		nbytes -= 2;
-	}
-	if (nbytes == 1) {
-		oddbyte = 0;
-		*((u_char*)&oddbyte)= *(u_char*)ptr;
-		sum += oddbyte;
-	}
-
-	sum = (sum >> 16) + (sum & 0xffff);
-	sum = sum + (sum >> 16);
-	answer = (short)~sum;
-	
-	return answer;
-}
-
 int send_syn_temp_to_switch() {
 	int sockfd;
 	struct ifreq cpuif_req;
@@ -315,7 +314,7 @@ int send_syn_temp_to_switch() {
     for (unsigned int idx = 0; idx < 6; idx++) {
         eth_h->h_source[idx] = MAC_ARRAY(PROBER_MAC, idx);
     }
-    eth_h->h_proto = htons(ETH_P_IP);
+    eth_h->h_proto = htons(ETHER_TYPE_ITEMPLATE);
 	tx_len += sizeof(struct ethhdr);
 
 	/* IP header */
@@ -363,6 +362,98 @@ int send_syn_temp_to_switch() {
 	// sendbuf[tx_len++] = 0xad;
 	// sendbuf[tx_len++] = 0xbe;
 	// sendbuf[tx_len++] = 0xef;
+
+	/* Index of the network device */
+	sock_addr.sll_ifindex = cpuif_req.ifr_ifindex;
+	/* Address length*/
+	sock_addr.sll_halen = ETH_ALEN;
+	/* Destination MAC */
+	// sock_addr.sll_addr[0] = 0;
+	// sock_addr.sll_addr[1] = 0;
+	// sock_addr.sll_addr[2] = 0;
+	// sock_addr.sll_addr[3] = 0;
+	// sock_addr.sll_addr[4] = 0;
+	// sock_addr.sll_addr[5] = 0;
+
+	/* Send packet */
+    for (uint32_t idx = 0; idx < 50000; idx++) {
+        if (sendto(sockfd, sendbuf, tx_len, 0,
+                (struct sockaddr *)&sock_addr, sizeof(struct sockaddr_ll)) < 0) {
+            printf("Send failed\n");
+        }
+    }
+
+	return 0;
+}
+
+int send_icmp_temp_to_switch() {
+	int sockfd;
+	struct ifreq cpuif_req;
+	int tx_len = 0;
+	char sendbuf[PKTBUF_SIZE];
+	struct ethhdr *eth_h = (struct ethhdr *)sendbuf;
+    struct iphdr *ip_h = (struct iphdr *)
+                         ((char *)eth_h + sizeof(struct ethhdr));
+    struct icmphdr *icmp_h = (struct icmphdr *)
+                             ((char *)ip_h + sizeof(struct iphdr));
+    struct sockaddr_ll sock_addr;
+	char cpuif_name[IFNAMSIZ];
+	
+	/* Get interface name */
+    strcpy(cpuif_name, CPUIF_NAME);
+
+    /* Open RAW socket to send on */
+	if ((sockfd = socket(AF_PACKET, SOCK_RAW, IPPROTO_RAW)) == -1) {
+	    perror("socket");
+        return -1;
+	}
+
+	/* Get the index of the interface to send on */
+	memset(&cpuif_req, 0, sizeof(struct ifreq));
+	strncpy(cpuif_req.ifr_name, cpuif_name, IFNAMSIZ - 1);
+	if (ioctl(sockfd, SIOCGIFINDEX, &cpuif_req) < 0) {
+	    perror("SIOCGIFINDEX");
+		close(sockfd);
+        return -1;
+    }
+
+	/* Construct the Ethernet header */
+	memset(sendbuf, 0, PKTBUF_SIZE);
+	/* Ethernet header */
+    for (unsigned int idx = 0; idx < 6; idx++) {
+        eth_h->h_source[idx] = MAC_ARRAY(PROBER_MAC, idx);
+    }
+    eth_h->h_proto = htons(ETHER_TYPE_ITEMPLATE);
+	tx_len += sizeof(struct ethhdr);
+
+	/* IP header */
+    ip_h->ihl = 5;
+    ip_h->version = 4;
+    ip_h->tos = 0;
+    ip_h->tot_len = htons(sizeof(struct iphdr) + sizeof(struct tcphdr));
+    ip_h->id = htons(12345);
+    ip_h->ttl = 128;
+    ip_h->protocol = IPPROTO_ICMP;
+    ip_h->check = 0;
+    ip_h->saddr = htonl(PROBER_IP);
+    // ip_h->daddr = inet_addr("192.168.40.134");
+    // IP Checksum
+    ip_h->check = csum ((uint16_t *)ip_h, sizeof(struct iphdr));
+	tx_len += sizeof(struct iphdr);
+
+	/* TCP header */
+    icmp_h->type = ICMP_ECHO;
+    icmp_h->code = 0;
+    icmp_h->checksum = 0;
+    icmp_h->un.echo.id = 0;
+    icmp_h->un.echo.sequence = 0;
+    icmp_h->checksum = csum ((uint16_t *)icmp_h, sizeof(struct icmphdr) + 12);
+	tx_len += sizeof(struct icmphdr);
+
+	// /* ICMP data */
+    // for (uint8_t idx = 0; idx < 12; idx++) {
+    //     sendbuf[tx_len++] = 0;
+    // }
 
 	/* Index of the network device */
 	sock_addr.sll_ifindex = cpuif_req.ifr_ifindex;

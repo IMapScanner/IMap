@@ -20,9 +20,16 @@ struct imap_result_meta {
 } __rte_packed;
 
 struct imap_probe_result {
+#if __PROBE_TYPE__ == PROBE_TYPE_SYN_PROBER
     uint16_t probe_port;
     uint8_t  _pad;
     uint8_t  result;
+#elif __PROBE_TYPE__ == PROBE_TYPE_ICMP_PROBER
+    uint8_t  icmp_type;
+    uint8_t  icmp_code;
+    uint8_t  _pad;
+    uint8_t  result;
+#endif
 } __rte_packed;
 
 struct imap_result_pack {
@@ -32,7 +39,12 @@ struct imap_result_pack {
 
 struct imap_result_entry {
     uint32_t probe_addr;
+#if __PROBE_TYPE__ == PROBE_TYPE_SYN_PROBER
     uint16_t probe_port;
+#elif __PROBE_TYPE__ == PROBE_TYPE_ICMP_PROBER
+    uint8_t  icmp_type;
+    uint8_t  icmp_code;
+#endif
     uint32_t probe_result;
 };
 
