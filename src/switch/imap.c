@@ -60,7 +60,7 @@ static void parse_options(imap_conf_t *iconf, int argc, char **argv) {
         {"rate", required_argument, 0, OPT_RATE},
         {"seed-rate", required_argument, 0, OPT_SEED_RATE},
         {"waiting-time", required_argument, 0, OPT_WAITING_TIME},
-        {"config-file", required_argument, 0, OPT_CONFIG_FILE},
+        {"ip-list", required_argument, 0, OPT_CONFIG_FILE},
     };
 
     memset(iconf, 0, sizeof(imap_conf_t));
@@ -112,7 +112,7 @@ static void parse_options(imap_conf_t *iconf, int argc, char **argv) {
                 break;
             case OPT_CONFIG_FILE:
                 strcpy(iconf->config_filename, optarg);
-                printf("Config file: %s\n", optarg);
+                printf("IP list config file: %s\n", optarg);
                 break;
             case 'h':
             case '?':

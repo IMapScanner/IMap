@@ -56,5 +56,5 @@ sudo ./imap-result-server -l 0-7 -n 8 -- -p 1
 ```
 ### Start the IMap scanner on the switch
 ```sh
-./imap --probe-port-range 0:65535 --rate 45000000
+./imap --probe-port-range 0:65535 --ip-list ip.txt --rate 55000000
 ```
