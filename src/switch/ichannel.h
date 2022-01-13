@@ -62,8 +62,8 @@ typedef struct update_notifying_channel_s {
 } update_notifying_channel_t;
 
 #if __TOFINO_MODE__ == 0
-// static const char CPUIF_NAME[] = "bf_pci0";
-static const char CPUIF_NAME[] = "enp4s0";
+static const char CPUIF_NAME[] = "bf_pci0";
+// static const char CPUIF_NAME[] = "enp4s0";
 #else
 static const char CPUIF_NAME[] = "veth251";
 #endif
